@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Zaman Tüneli Oyunu (Dinamik Zorluk)</title>
+<style>
+:root{
+  --bg:#0b0f26; --panel:#141a3f; --panel2:#192159; --ink:#eef0ff; --muted:#a9add6;
+  --accent:#ffde59; --gold:#ffde59; --good:#2ecc71; --danger:#e74c3c; --primary:#6c5dd3;
+}
+*{box-sizing:border-box;user-select:none}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);
+  font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;overflow:hidden}
+
+/* Çerçeve */
+#game-container{position:relative;width:100vw;height:100vh;background:radial-gradient(circle,var(--panel),var(--bg));
+  box-shadow:inset 0 0 25px rgba(0,0,0,.6);display:flex;flex-direction:column;overflow:hidden}
+.ui-bar{padding:10px 15px;background:rgba(0,0,0,.3);display:flex;justify-content:space-between;align-items:center;gap:15px;
+  flex-shrink:0;border-bottom:2px solid rgba(108,93,211,.3)}
+.ui-left-group,.ui-right-group{display:flex;align-items:center;gap:20px}
+.stats{display:flex;gap:20px;font-size:clamp(1.1rem,2.7vw,1.5rem);font-weight:700}
+.btn{background:linear-gradient(180deg,var(--primary),#4e42c2);border:1px solid rgba(255,255,255,.15);color:#fff;
+  padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:700;font-size:.9rem;display:flex;align-items:center;gap:8px;
+  box-shadow:0 5px 15px rgba(0,0,0,.3);transition:transform .1s, box-shadow .2s}
+.btn:hover{box-shadow:0 8px 20px rgba(0,0,0,.4);transform:translateY(-1px)}
+.btn:active{transform:scale(.98)}
+.btn.ghost{background:linear-gradient(180deg,#2b2f55,#1d2147)}
+.btn.good{background:linear-gradient(180deg,var(--good),#177845)}
+
+/* Maximize/minimize butonu */
+#ui-fullscreen-btn{width:50px;height:50px;border-radius:12px;display:grid;place-items:center;
+  background:linear-gradient(180deg,#2b2f55,#1d2147);border:1px solid rgba(255,255,255,.2);box-shadow:0 5px 18px rgba(0,0,0,.4);
+  overflow:visible}
+#ui-fullscreen-btn .icon img{width:36px;height:36px;position:relative;right:5px}
+
+/* Bilgi şeridi */
+.info-panel{text-align:center;padding:6px 12px;background:rgba(0,0,0,.2);color:var(--gold);
+  font-weight:700;font-size:1.3rem;border-radius:0 0 12px 12px;box-shadow:0 5px 10px rgba(0,0,0,.2);
+  margin:0 auto 6px auto;width:max-content;flex-shrink:0;text-shadow:0 0 5px rgba(255,222,89,.5)}
+
+/* Tehlike Barı */
+.danger-bar-container{padding:0 20px 10px 20px;flex-shrink:0}
+.danger-bar{width:100%;height:12px;background:var(--panel2);border-radius:99px;border:1px solid rgba(0,0,0,.5);overflow:hidden}
+.danger-bar-fill{width:0%;height:100%;background:linear-gradient(90deg,var(--gold),var(--danger));
+  border-radius:99px;box-shadow:0 0 10px var(--danger);transition:width .1s linear}
+
+/* Oyun alanı */
+#game-area{flex-grow:1;display:flex;align-items:center;justify-content:center;padding:14px;min-height:0;cursor:crosshair}
+#maze-svg{width:100%;height:100%;max-width:1000px;max-height:560px}
+
+/* Yol ve hitbox */
+.path-visual{stroke:var(--primary);stroke-width:15;stroke-linecap:round;stroke-linejoin:round;fill:none;
+  filter:drop-shadow(0 0 8px var(--primary));pointer-events:none}
+#path-danger{stroke:var(--danger);stroke-width:17;stroke-linecap:round;stroke-linejoin:round;fill:none;
+  filter:drop-shadow(0 0 10px var(--danger));pointer-events:none}
+.path-hitbox{stroke:transparent;stroke-width:45;stroke-linecap:round;stroke-linejoin:round;fill:none;pointer-events:stroke}
+
+/* Başlangıç/Bitiş ve etiket */
+#start-point{fill:var(--good)}
+#finish-point{fill:var(--accent)}
+#start-point.pulse{animation:pulse 1.4s infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+#start-label{font-size:18px;font-weight:800;fill:var(--good);text-shadow:0 0 8px rgba(46,204,113,.9);pointer-events:none}
+
+/* Modal (bitiş) */
+.modal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(11,15,38,.7);backdrop-filter:blur(8px);z-index:1000}
+.modal.active{display:flex}
+.modal-content{position:relative;background:linear-gradient(160deg,var(--panel),var(--panel2));
+  border:1px solid var(--accent);padding:26px 34px;border-radius:16px;max-width:520px;width:90%;text-align:center;
+  box-shadow:0 10px 50px rgba(0,0,0,.5)}
+.modal-content h2{margin:0 0 8px 0;font-size:2rem;color:var(--gold)}
+.modal-content p{color:var(--muted);font-size:1.02rem;line-height:1.55}
+.pass-box{display:flex;gap:12px;align-items:center;justify-content:center;margin:16px 0;background:rgba(0,0,0,.3);padding:10px 12px;border-radius:12px}
+.pass{font-size:1.15rem;font-weight:900;color:var(--gold);letter-spacing:2px;text-shadow:0 0 8px var(--gold)}
+.close-modal-btn{position:absolute;top:10px;right:15px;background:none;border:none;color:var(--muted);font-size:2rem;font-weight:700;cursor:pointer;line-height:1}
+.close-modal-btn:hover{color:var(--ink);transform:scale(1.06)}
+</style>
+</head>
+<body>
+
+<div id="game-container">
+  <div class="ui-bar">
+    <div class="ui-left-group">
+      <div class="stats"><div id="timer-display">Süre: 0.00</div></div>
+    </div>
+    <div class="ui-right-group">
+      <button class="btn good" id="start-btn">YENİDEN BAŞLA</button>
+      <button id="ui-fullscreen-btn" class="btn ghost" title="Tam Ekran Modu">
+        <span class="icon">
+          <img id="icon-expand" src="https://raw.githubusercontent.com/erhan3861/assets/main/maximize.png" alt="Tam Ekran Yap"/>
+          <img id="icon-compress" src="https://raw.githubusercontent.com/erhan3861/assets/main/minimize.png" alt="Tam Ekrandan Çık" style="display:none;"/>
+        </span>
+      </button>
+    </div>
+  </div>
+
+  <div class="info-panel" id="info-panel">
+    Başlamak için <b>yeşil noktaya</b> tıklayın veya dokunun. Zaman yarığı yaklaştıkça çubuk dolar!
+  </div>
+
+  <div class="danger-bar-container">
+    <div class="danger-bar"><div id="danger-bar-fill" class="danger-bar-fill"></div></div>
+  </div>
+
+  <div id="game-area">
+    <svg id="maze-svg" viewBox="0 0 1000 600" aria-label="Zaman Tüneli Parkuru">
+      <defs>
+        <path id="maze-path-d" d="M 50 500 C 150 100, 350 550, 500 300 S 650 50, 850 400 L 950 500" />
+      </defs>
+      <use xlink:href="#maze-path-d" class="path-visual" />
+      <use xlink:href="#maze-path-d" id="path-danger" />
+      <use xlink:href="#maze-path-d" class="path-hitbox" />
+      <circle id="start-point" cx="50" cy="500" r="20" class="pulse"/>
+      <text id="start-label" x="58" y="492">BAŞLA</text>
+      <circle id="finish-point" cx="950" cy="500" r="20" />
+    </svg>
+  </div>
+</div>
+
+<div id="end-modal" class="modal" role="dialog" aria-modal="true">
+  <div class="modal-content">
+    <button id="close-end-modal-btn" class="close-modal-btn" title="Kapat">&times;</button>
+    <h2 id="end-title">💥 Başaramadın!</h2>
+    <p id="end-score">Zaman yarığı seni yakaladı!</p>
+    <div id="password-section" style="display:none;">
+      <p>Bölüm şifreniz:</p>
+      <div class="pass-box">
+        <span id="password" class="pass">—</span>
+        <button id="copy-btn" class="btn">Kopyala</button>
+      </div>
+    </div>
+    <p style="color:var(--muted);font-size:.9rem;margin-top:10px;">Yeni bir deneme için <b>YENİDEN BAŞLA</b> butonunu kullan.</p>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* Elemanlar */
+const infoPanel = document.getElementById('info-panel');
+const timerDisplay = document.getElementById('timer-display');
+const startBtn = document.getElementById('start-btn');
+const fsBtn = document.getElementById('ui-fullscreen-btn');
+const iconExpand = document.getElementById('icon-expand');
+const iconCompress = document.getElementById('icon-compress');
+
+const pathVisual = document.querySelector('.path-visual');
+const pathHitbox = document.querySelector('.path-hitbox');
+const pathDanger = document.getElementById('path-danger');
+const startPoint = document.getElementById('start-point');
+const startLabel = document.getElementById('start-label');
+const finishPoint = document.getElementById('finish-point');
+
+const endModal = document.getElementById('end-modal');
+const endTitle = document.getElementById('end-title');
+const endScore = document.getElementById('end-score');
+const closeEndModalBtn = document.getElementById('close-end-modal-btn');
+const passwordSection = document.getElementById('password-section');
+const passwordDisplay = document.getElementById('password');
+const copyBtn = document.getElementById('copy-btn');
+
+const dangerBarFill = document.getElementById('danger-bar-fill');
+
+/* Ayarlar */
+const PASSWORD_KEY = 'TIME-TUNNEL-RUNNER-2025';
+const CHASE_DURATION = 12000; // ms
+const OFFPATH_GRACE = 90;     // ms tolerans
+
+/* Durum */
+let isGameRunning = false;
+let gameEnded = false;
+let startTime = 0;
+let timerInterval = null;
+let chaseTimeoutId = null;
+let animationFrameId = null;
+let pathLength = 0;
+let offPathTimer = null;
+let onPath = false;
+
+/* Yardımcı */
+const fmt = t => t.toFixed(2);
+const setInfo = msg => infoPanel.textContent = msg;
+
+/* Zamanlayıcı / Kovalama */
+function updateTimer(){
+  if(!isGameRunning) return;
+  const elapsed = (Date.now()-startTime)/1000;
+  timerDisplay.textContent = `Süre: ${fmt(elapsed)}`;
+}
+function animateChase(){
+  if(!isGameRunning) return;
+  const elapsed = Date.now() - startTime;
+  const p = Math.min(elapsed / CHASE_DURATION, 1);
+  pathDanger.style.strokeDashoffset = pathLength * (1 - p);
+  dangerBarFill.style.width = (p*100).toFixed(1) + '%';
+  animationFrameId = requestAnimationFrame(animateChase);
+}
+
+/* Oyun akışı */
+function resetGame(){
+  clearInterval(timerInterval); timerInterval=null;
+  clearTimeout(chaseTimeoutId); chaseTimeoutId=null;
+  cancelAnimationFrame(animationFrameId); animationFrameId=null;
+  clearTimeout(offPathTimer); offPathTimer=null;
+
+  isGameRunning=false; gameEnded=false; onPath=false;
+  startTime=0; timerDisplay.textContent='Süre: 0.00';
+
+  if(!pathLength){
+    try{ pathLength = pathVisual.getTotalLength(); }catch{ pathLength = 2000; }
+  }
+  pathDanger.style.strokeDasharray = String(pathLength);
+  pathDanger.style.strokeDashoffset = String(pathLength);
+  dangerBarFill.style.width = '0%';
+
+  startPoint.classList.add('pulse');
+  startLabel.style.opacity = '1';
+  setInfo('Başlamak için yeşil noktaya tıklayın veya dokunun. Çubuk dolmadan bitişe ulaş!');
+
+  detachGameplayEvents();
+  attachGameplayEvents();
+}
+
+function handleGameStart(){
+  if(isGameRunning || gameEnded) return;
+  isGameRunning = true;
+  startTime = Date.now();
+  startPoint.classList.remove('pulse');
+  startLabel.style.opacity = '0';
+  setInfo('Hızlı ol! Zaman yarığı yaklaşıyor...');
+
+  timerInterval = setInterval(updateTimer, 50);
+  chaseTimeoutId = setTimeout(()=> endGame(false,'Yetişemedin!'), CHASE_DURATION);
+  requestAnimationFrame(animateChase);
+}
+
+function onHitboxEnter(){
+  onPath = true;
+  if(offPathTimer){ clearTimeout(offPathTimer); offPathTimer=null; }
+}
+function onHitboxLeave(){
+  onPath = false;
+  if(!isGameRunning) return;
+  if(offPathTimer) clearTimeout(offPathTimer);
+  offPathTimer = setTimeout(()=>{ if(!onPath) endGame(false,'Yoldan çıktın!'); }, OFFPATH_GRACE);
+}
+function onFinishEnter(){
+  if(isGameRunning) endGame(true);
+}
+
+function attachGameplayEvents(){
+  // Başlat: hem tıklama/dokunma hem de hover
+  startPoint.addEventListener('pointerdown', handleGameStart);
+  startPoint.addEventListener('pointerenter', handleGameStart);
+
+  // Yol takibi
+  pathHitbox.addEventListener('pointerenter', onHitboxEnter);
+  pathHitbox.addEventListener('pointerleave', onHitboxLeave);
+
+  // Bitiş
+  finishPoint.addEventListener('pointerenter', onFinishEnter);
+}
+function detachGameplayEvents(){
+  startPoint.removeEventListener('pointerdown', handleGameStart);
+  startPoint.removeEventListener('pointerenter', handleGameStart);
+
+  pathHitbox.removeEventListener('pointerenter', onHitboxEnter);
+  pathHitbox.removeEventListener('pointerleave', onHitboxLeave);
+
+  finishPoint.removeEventListener('pointerenter', onFinishEnter);
+}
+
+function endGame(win, reason=''){
+  if(gameEnded) return;
+  gameEnded = true; isGameRunning=false;
+
+  clearInterval(timerInterval); timerInterval=null;
+  clearTimeout(chaseTimeoutId); chaseTimeoutId=null;
+  cancelAnimationFrame(animationFrameId); animationFrameId=null;
+  clearTimeout(offPathTimer); offPathTimer=null;
+
+  if(win){
+    const t = (Date.now()-startTime)/1000;
+    endTitle.textContent = '🎉 Tünelden Kaçtın!';
+    endScore.textContent = `Görevi ${fmt(t)} saniyede tamamladın.`;
+    passwordSection.style.display = 'block';
+    passwordDisplay.textContent = PASSWORD_KEY;
+  }else{
+    endTitle.textContent = '💥 Başaramadın!';
+    endScore.textContent = reason || 'Zaman noktası seni yakaladı!';
+    passwordSection.style.display = 'none';
+  }
+  endModal.classList.add('active');
+}
+
+/* UI: Tam ekran & Kopyala */
+function toggleFullscreen(){
+  if(!document.fullscreenElement){
+    document.documentElement.requestFullscreen().catch(err=>alert(`Tam ekran başlatılamadı: ${err.message}`));
+  }else if(document.exitFullscreen){ document.exitFullscreen(); }
+}
+function updateFullscreenIcon(){
+  const on = !!document.fullscreenElement;
+  iconExpand.style.display = on ? 'none' : 'block';
+  iconCompress.style.display = on ? 'block' : 'none';
+}
+copyBtn?.addEventListener('click', async ()=>{
+  const t = (passwordDisplay?.textContent||'').trim();
+  if(!t || t==='—') return;
+  try{ await navigator.clipboard.writeText(t); copyBtn.textContent='✅ Kopyalandı'; }
+  catch{ copyBtn.textContent='❌ Hata'; }
+  setTimeout(()=> copyBtn.textContent='Kopyala', 1400);
+});
+
+/* Global bağlar */
+document.getElementById('close-end-modal-btn').addEventListener('click', ()=>{ endModal.classList.remove('active'); resetGame(); });
+endModal.addEventListener('click', (e)=>{ if(e.target===endModal){ endModal.classList.remove('active'); resetGame(); }});
+startBtn.addEventListener('click', resetGame);
+fsBtn.addEventListener('click', toggleFullscreen);
+document.addEventListener('fullscreenchange', updateFullscreenIcon);
+
+/* Başlat */
+window.onload = ()=>{
+  try{ pathLength = document.querySelector('.path-visual').getTotalLength(); }catch{ pathLength = 2000; }
+  updateFullscreenIcon();
+  resetGame(); // giriş sayfası yok; oyun hazır bekler
+};
+</script>
+</body>
+</html>
